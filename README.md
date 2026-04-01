@@ -4,6 +4,8 @@ MCP server for cross-referenced code navigation across the [EIC](https://www.bnl
 
 Provides AI assistants with structured access to 55+ indexed EIC repositories — identifier cross-references, ripgrep search, source file reading, and directory browsing.
 
+Browse the code directly: https://eic-code-browser.sdcc.bnl.gov/lxr/source
+
 ## Tools
 
 | Tool | Description |
