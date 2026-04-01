@@ -24,8 +24,13 @@ python lxr_mcp_server.py
 
 ### With Claude Code
 
-Add to your Claude Code MCP config:
+1. Clone the repo and install dependencies:
+```bash
+git clone https://github.com/BNLNPPS/lxr-mcp-server.git
+pip install -r lxr-mcp-server/requirements.txt
+```
 
+2. Add to your Claude Code MCP config (`~/.claude/settings.json` or project `.mcp.json`):
 ```json
 {
   "mcpServers": {
@@ -37,11 +42,18 @@ Add to your Claude Code MCP config:
 }
 ```
 
+3. Restart Claude Code.
+
+### Network access
+
+The LXR code browser at `eic-code-browser.sdcc.bnl.gov` is accessible from inside the BNL network. From outside BNL, an SSH tunnel works (same approach as for remote SSH access to BNL machines). Set `LXR_BASE_URL` to point at your tunnel endpoint.
+
 ### Environment variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `LXR_BASE_URL` | `https://eic-code-browser.sdcc.bnl.gov/lxr` | LXR instance URL |
+| `LXR_CONFIG` | `lxr_config.yaml` (next to server script) | Path to config file |
 
 ## Examples
 
