@@ -23,20 +23,41 @@ import os
 import re
 
 import httpx
+import yaml
 from bs4 import BeautifulSoup
 from mcp.server.fastmcp import FastMCP
 
-LXR_BASE = os.environ.get(
-    "LXR_BASE_URL", "https://eic-code-browser.sdcc.bnl.gov/lxr"
+# Load config
+_CONFIG_PATH = os.environ.get(
+    "LXR_CONFIG", os.path.join(os.path.dirname(__file__), "lxr_config.yaml")
 )
+_config = {}
+if os.path.exists(_CONFIG_PATH):
+    with open(_CONFIG_PATH) as _f:
+        _config = yaml.safe_load(_f) or {}
+
+LXR_BASE = os.environ.get("LXR_BASE_URL", _config.get("base_url",
+    "https://eic-code-browser.sdcc.bnl.gov/lxr"))
+OMIT_PATHS = _config.get("omit_paths", [])
 
 mcp = FastMCP(
     "lxr-code-browser",
     instructions=(
-        "EIC LXR Code Browser — cross-referenced navigation across 55+ EIC repositories. "
-        "Use lxr_ident to find where symbols are defined and used. "
-        "Use lxr_search for regex/text search across the full codebase. "
-        "Use lxr_source to read source files. Use lxr_list to browse directories."
+        "EIC LXR Code Browser — cross-referenced source code navigation across 55+ EIC "
+        "repositories indexed daily from GitHub. LXR (Linux Cross-Reference) builds a "
+        "symbol index so you can find where any class, function, variable, or typedef is "
+        "defined and every file that references it — across the entire codebase.\n\n"
+        "Indexed repositories include: EICrecon (reconstruction), epic (detector geometry), "
+        "DD4hep, npsim (simulation), jana2 (framework), eic-smear, physics_benchmarks, "
+        "containers, afterburner, eic-shell, and many more.\n\n"
+        "Tools:\n"
+        "- lxr_ident: Find definitions and cross-references for a symbol. The key tool — "
+        "no grep can do this, it uses a real code index.\n"
+        "- lxr_search: Ripgrep-powered regex search across all repos at once.\n"
+        "- lxr_source: Read source files with line numbers.\n"
+        "- lxr_list: Browse directory structure.\n\n"
+        "All file references include clickable LXR URLs. "
+        "Web UI: https://eic-code-browser.sdcc.bnl.gov/lxr/source"
     ),
 )
 
@@ -54,6 +75,19 @@ def _fetch(path: str, params: dict = None) -> BeautifulSoup:
 def _text(el) -> str:
     """Extract clean text from an element."""
     return el.get_text(strip=True) if el else ""
+
+
+def _omit(path: str) -> bool:
+    """Return True if path should be filtered out."""
+    return any(path.startswith(p) for p in OMIT_PATHS)
+
+
+def _link(path: str, line: str = "") -> str:
+    """Build an LXR URL for a file path and optional line number."""
+    url = f"{LXR_BASE}/source{path}"
+    if line:
+        url += f"#{line.zfill(4)}"
+    return url
 
 
 # ── lxr_ident ──────────────────────────────────────────────────────────────
@@ -85,14 +119,16 @@ def lxr_ident(symbol: str, definitions_only: bool = False) -> str:
         for row in def_table.find_all("tr"):
             cells = row.find_all("td")
             if len(cells) >= 4:
+                fpath = _text(cells[2])
+                if _omit(fpath):
+                    continue
                 dtype = _text(cells[0])
                 member_of = _text(cells[1])
-                fpath = _text(cells[2])
                 line_no = _text(cells[3])
                 entry = f"  {dtype}"
                 if member_of:
                     entry += f" ({member_of})"
-                entry += f"  {fpath}:{line_no}"
+                entry += f"  {fpath}:{line_no}  {_link(fpath, line_no)}"
                 defs.append(entry)
         if defs:
             lines.append(f"Definitions of '{symbol}' ({len(defs)}):")
@@ -113,13 +149,14 @@ def lxr_ident(symbol: str, definitions_only: bool = False) -> str:
                 if len(cells) >= 2:
                     file_cell = cells[0]
                     line_cell = cells[1]
-                    # File cell may be empty (searchfilevoid) for continuation
                     ftext = _text(file_cell)
                     if ftext and ftext != "\xa0":
                         current_file = ftext
+                    if _omit(current_file):
+                        continue
                     line_no = _text(line_cell)
                     if line_no and current_file:
-                        refs.append(f"  {current_file}:{line_no}")
+                        refs.append(f"  {current_file}:{line_no}  {_link(current_file, line_no)}")
             if refs:
                 lines.append(f"\nReferences to '{symbol}' ({len(refs)}):")
                 lines.extend(refs)
@@ -188,12 +225,15 @@ def lxr_search(
         if ftext and ftext != "\xa0":
             current_file = ftext
 
+        if _omit("/" + current_file):
+            continue
+
         line_no = _text(line_cell)
-        # Get the text content, stripping HTML tags but preserving the text
-        match_text = _text(text_cell)
+        # Preserve spaces in match text (get_text(strip=True) collapses them)
+        match_text = text_cell.get_text().strip() if text_cell else ""
 
         if line_no and current_file:
-            results.append(f"  {current_file}:{line_no}  {match_text}")
+            results.append(f"  {current_file}:{line_no}  {match_text}  {_link('/' + current_file, line_no)}")
 
         if len(results) >= max_results:
             break

@@ -1,0 +1,8 @@
+# LXR MCP Server configuration
+
+base_url: https://eic-code-browser.sdcc.bnl.gov/lxr
+
+# Paths to omit from results (prefix match)
+omit_paths:
+  - /juggler/
+  - /include/EICrecon/   # duplicate of EICrecon/src/ (installed headers)
